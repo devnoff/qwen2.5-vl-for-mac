@@ -58,4 +58,7 @@ htmlcov/
 .ipynb_checkpoints
 
 # Generated files
-image_request.json 
+image_request.json
+
+# 모델 선택 임시 파일
+.selected_model_size 

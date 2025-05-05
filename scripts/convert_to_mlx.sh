@@ -44,29 +44,60 @@ source "$WORK_DIR/venv/bin/activate" || handle_error "가상 환경 활성화 �
 # 필요한 패키지 설치
 pip install mlx-vlm || handle_error "mlx-vlm 패키지 설치 실패"
 
-# 모델 크기 선택
-echo -e "${GREEN}변환할 모델 크기를 선택하세요:${NC}"
-echo "1) Qwen-2.5-VL-3B (소형, 빠름, 가장 적은 메모리 필요)"
-echo "2) Qwen-2.5-VL-7B (중형, 균형적인 품질)"
-echo "3) Qwen-2.5-VL-32B (대형, 최고 품질, 많은 메모리 필요)"
+# 파라미터 처리 추가
+MODEL_SIZE=""  # 기본값 없음
 
-read -p "선택하세요 (1-3): " model_option
+# 인자 처리
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --model-size) MODEL_SIZE="$2"; shift ;;
+        *) echo "알 수 없는 파라미터: $1"; exit 1 ;;
+    esac
+    shift
+done
 
-case $model_option in
-    1)
-        MODEL_SIZE="3B"
-        ;;
-    2)
-        MODEL_SIZE="7B"
-        ;;
-    3)
-        MODEL_SIZE="32B"
-        ;;
-    *)
-        echo "잘못된 선택입니다. 기본값으로 7B를 사용합니다."
-        MODEL_SIZE="7B"
-        ;;
-esac
+# 환경 변수에서 확인
+if [ -n "$QWEN_MODEL_SIZE" ] && [ -z "$MODEL_SIZE" ]; then
+    MODEL_SIZE="$QWEN_MODEL_SIZE"
+    echo "환경 변수에서 모델 크기를 가져왔습니다: ${MODEL_SIZE}"
+fi
+
+# 저장된 모델 정보 확인
+if [ -z "$MODEL_SIZE" ] && [ -f "$WORK_DIR/.selected_model_size" ]; then
+    MODEL_SIZE=$(cat "$WORK_DIR/.selected_model_size")
+    echo "이전에 선택한 모델 크기를 사용합니다: ${MODEL_SIZE}"
+fi
+
+# 다운로드된 모델 자동 감지
+if [ -z "$MODEL_SIZE" ]; then
+    for size in "3B" "7B" "32B"; do
+        if [ -d "$MODEL_DIR/Qwen2.5-VL-${size}-original" ]; then
+            MODEL_SIZE="$size"
+            echo "다운로드된 모델을 자동 감지했습니다: Qwen2.5-VL-${MODEL_SIZE}"
+            break
+        fi
+    done
+fi
+
+# 여전히 모델 크기가 결정되지 않았다면 사용자에게 물어봄
+if [ -z "$MODEL_SIZE" ]; then
+    echo "변환할 모델 크기를 선택하세요:"
+    echo "1) Qwen-2.5-VL-3B (소형, 빠름, 가장 적은 메모리 필요)"
+    echo "2) Qwen-2.5-VL-7B (중형, 균형적인 품질)"
+    echo "3) Qwen-2.5-VL-32B (대형, 최고 품질, 많은 메모리 필요)"
+
+    read -p "선택하세요 (1-3) [기본: 2]: " model_option
+    model_option=${model_option:-2}
+
+    case $model_option in
+        1) MODEL_SIZE="3B" ;;
+        2) MODEL_SIZE="7B" ;;
+        3) MODEL_SIZE="32B" ;;
+        *) MODEL_SIZE="7B" ;;
+    esac
+fi
+
+echo "변환할 모델: Qwen-2.5-VL-${MODEL_SIZE}"
 
 # 입력 및 출력 경로 설정
 INPUT_MODEL_PATH="$MODEL_DIR/Qwen2.5-VL-${MODEL_SIZE}-original"
@@ -86,13 +117,30 @@ mkdir -p "$MLX_MODEL_DIR"
 # 출력 모델 경로가 이미 존재하는 경우 확인
 if [ -d "$OUTPUT_MODEL_PATH" ]; then
     echo "경고: 출력 디렉토리가 이미 존재합니다: $OUTPUT_MODEL_PATH"
-    read -p "기존 디렉토리를 삭제하고 계속 진행하시겠습니까? (y/n): " confirm
-    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
-        echo "기존 디렉토리 삭제 중..."
-        rm -rf "$OUTPUT_MODEL_PATH" || handle_error "디렉토리 삭제 실패"
-    else
-        handle_error "사용자에 의해 작업이 중단되었습니다."
-    fi
+    echo "1) 스킵 - 변환 건너뛰기 (기존 모델 그대로 유지)"
+    echo "2) 덮어쓰기 - 기존 디렉토리 내용 덮어쓰기 (일부 파일이 남을 수 있음)"
+    echo "3) 삭제 후 변환 - 기존 디렉토리 완전히 삭제 후 새로 변환"
+    
+    read -p "선택하세요 (1-3): " option
+    
+    case $option in
+        1)
+            echo "변환을 건너뜁니다. 기존 MLX 모델을 그대로 사용합니다."
+            exit 0
+            ;;
+        2)
+            echo "기존 디렉토리 내용을 덮어쓰고 계속 진행합니다..."
+            # 덮어쓰기는 별도 작업 불필요 (mlx-vlm.convert가 처리)
+            ;;
+        3)
+            echo "기존 디렉토리 삭제 중..."
+            rm -rf "$OUTPUT_MODEL_PATH" || handle_error "디렉토리 삭제 실패"
+            ;;
+        *)
+            echo "잘못된 선택입니다. 기본값으로 변환을 건너뜁니다."
+            exit 0
+            ;;
+    esac
 fi
 
 # MLX 변환 실행

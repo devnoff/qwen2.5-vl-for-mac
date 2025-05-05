@@ -74,9 +74,33 @@ fi
 # 가상 환경 활성화
 source "$WORK_DIR/venv/bin/activate" || handle_error "가상 환경 활성화 실패"
 
+# 모델 선택을 한 번만 하고 환경 변수 및 파일에 저장
+echo "모델 크기를 선택하세요:"
+echo "1) Qwen-2.5-VL-3B (소형, 빠름, 가장 적은 메모리 필요)"
+echo "2) Qwen-2.5-VL-7B (중형, 균형적인 품질)"
+echo "3) Qwen-2.5-VL-32B (대형, 최고 품질, 많은 메모리 필요)"
+
+read -p "선택하세요 (1-3) [기본: 2]: " model_option
+model_option=${model_option:-2}
+
+case $model_option in
+    1) MODEL_SIZE="3B" ;;
+    2) MODEL_SIZE="7B" ;;
+    3) MODEL_SIZE="32B" ;;
+    *) MODEL_SIZE="7B" ;; # 기본값
+esac
+
+# 환경 변수로 모델 크기 전달
+export QWEN_MODEL_SIZE="$MODEL_SIZE"
+
+# 선택한 모델 정보를 파일로 저장 (스크립트 간 공유용)
+echo "$MODEL_SIZE" > "$WORK_DIR/.selected_model_size"
+
+echo "선택한 모델: Qwen-2.5-VL-${MODEL_SIZE}"
+
 # 2. 모델 다운로드
 echo "2단계: Qwen-2.5-VL 모델 다운로드 중..."
-"$SCRIPT_DIR/download_model.sh"
+"$SCRIPT_DIR/download_model.sh" --model-size "$MODEL_SIZE"
 
 # 모델 다운로드 성공 여부 확인
 if [ $? -ne 0 ]; then
@@ -85,7 +109,7 @@ fi
 
 # 3. MLX 변환
 echo "3단계: 모델을 MLX 형식으로 변환 중..."
-"$SCRIPT_DIR/convert_to_mlx.sh"
+"$SCRIPT_DIR/convert_to_mlx.sh" --model-size "$MODEL_SIZE"
 
 # MLX 변환 성공 여부 확인
 if [ $? -ne 0 ]; then

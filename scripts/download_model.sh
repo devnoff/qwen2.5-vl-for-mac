@@ -42,36 +42,52 @@ if ! command -v git-lfs &> /dev/null; then
     exit 1
 fi
 
-# 모델 크기 선택
-echo -e "${GREEN}다운로드할 모델 크기를 선택하세요:${NC}"
-echo "1) Qwen-2.5-VL-3B (소형, 빠름, 가장 적은 메모리 필요)"
-echo "2) Qwen-2.5-VL-7B (중형, 균형적인 품질)"
-echo "3) Qwen-2.5-VL-32B (대형, 최고 품질, 많은 메모리 필요)"
+# 파라미터 처리 추가
+MODEL_SIZE=""  # 기본값 없음
 
-read -p "선택하세요 (1-3) [기본: 2]: " model_option
-model_option=${model_option:-2}
+# 인자 처리
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --model-size) MODEL_SIZE="$2"; shift ;;
+        *) echo "알 수 없는 파라미터: $1"; exit 1 ;;
+    esac
+    shift
+done
 
-case $model_option in
-    1)
-        MODEL_SIZE="3B"
-        MODEL_NAME="Qwen/Qwen2.5-VL-3B-Instruct"
-        echo -e "${GREEN}Qwen-2.5-VL-3B-Instruct 모델을 다운로드합니다.${NC}"
-        ;;
-    2)
-        MODEL_SIZE="7B"
-        MODEL_NAME="Qwen/Qwen2.5-VL-7B-Instruct"
-        echo -e "${GREEN}Qwen-2.5-VL-7B-Instruct 모델을 다운로드합니다.${NC}"
-        ;;
-    3)
-        MODEL_SIZE="32B"
-        MODEL_NAME="Qwen/Qwen2.5-VL-32B-Instruct"
-        echo -e "${GREEN}Qwen-2.5-VL-32B-Instruct 모델을 다운로드합니다.${NC}"
-        ;;
-    *)
-        echo -e "${RED}잘못된 선택입니다. 1-3 중 하나를 선택하세요.${NC}"
-        exit 1
-        ;;
-esac
+# 환경 변수에서 확인
+if [ -n "$QWEN_MODEL_SIZE" ] && [ -z "$MODEL_SIZE" ]; then
+    MODEL_SIZE="$QWEN_MODEL_SIZE"
+    echo "환경 변수에서 모델 크기를 가져왔습니다: ${MODEL_SIZE}"
+fi
+
+# 파라미터나 환경 변수가 없으면 사용자에게 선택 요청
+if [ -z "$MODEL_SIZE" ]; then
+    echo "다운로드할 모델 크기를 선택하세요:"
+    echo "1) Qwen-2.5-VL-3B (소형, 빠름, 가장 적은 메모리 필요)"
+    echo "2) Qwen-2.5-VL-7B (중형, 균형적인 품질)"
+    echo "3) Qwen-2.5-VL-32B (대형, 최고 품질, 많은 메모리 필요)"
+
+    read -p "선택하세요 (1-3) [기본: 2]: " model_option
+    model_option=${model_option:-2}
+
+    case $model_option in
+        1) MODEL_SIZE="3B" ;;
+        2) MODEL_SIZE="7B" ;;
+        3) MODEL_SIZE="32B" ;;
+        *) MODEL_SIZE="7B" ;; # 기본값
+    esac
+    
+    # 다른 스크립트에서도 사용할 수 있도록 환경 변수 설정
+    export QWEN_MODEL_SIZE="$MODEL_SIZE"
+fi
+
+echo "다운로드할 모델: Qwen-2.5-VL-${MODEL_SIZE}"
+
+# 모델 설정
+MODEL_NAME="Qwen/Qwen2.5-VL-${MODEL_SIZE}-Instruct"
+
+# 선택한 모델 정보를 파일로 저장 (스크립트 간 공유용)
+echo "$MODEL_SIZE" > "$WORK_DIR/.selected_model_size"
 
 # 다운로드 방법 선택
 echo -e "${GREEN}다운로드 방법을 선택하세요:${NC}"
