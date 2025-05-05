@@ -1,0 +1,1 @@
+scripts/setup_qwen_vl.sh
